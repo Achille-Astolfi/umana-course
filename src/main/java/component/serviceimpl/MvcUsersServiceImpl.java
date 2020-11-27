@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import iface.repository.MvcUsersRepository;
 import iface.service.MvcUsersService;
+import model.domain.Authentication;
 import model.entity.MvcUser;
 
 @Service
@@ -33,11 +34,12 @@ public class MvcUsersServiceImpl implements MvcUsersService {
 		mvcUser.setUsername(username);
 		mvcUser.setPassword(password);
 		var save = mvcUsersRepository.save(mvcUser);
-		encodeBasic(username, password);
+		logToken(username, password);
 		return save;
 	}
 
 	@Override
+	@Transactional(readOnly = true)
 	public Optional<MvcUser> readMvcUserByAuth(String auth) {
 		String basic;
 		try {
@@ -53,9 +55,31 @@ public class MvcUsersServiceImpl implements MvcUsersService {
 		}
 	}
 
-	private void encodeBasic(String username, String password) {
+	@Override
+	@Transactional(readOnly = true)
+	public Optional<Authentication> readMvcUserByUsernameAndPassword(String username, String password) {
+		return mvcUsersRepository.findByUsernameAndPassword(username, password)//
+				.map(this::tokenize)//
+				.map(this::createTokenResponse);
+	}
+
+	private Authentication createTokenResponse(String token) {
+		var tokenResponse = new Authentication();
+		tokenResponse.setAccessToken(token);
+		tokenResponse.setTokenType("Bearer");
+		return tokenResponse;
+	}
+
+	private void logToken(String username, String password) {
+		logger.info(username.toUpperCase() + " Authorization: Bearer " + tokenize(username, password));
+	}
+
+	private String tokenize(MvcUser mvcUser) {
+		return tokenize(mvcUser.getUsername(), mvcUser.getPassword());
+	}
+
+	private String tokenize(String username, String password) {
 		var basic = username + ':' + password;
-		logger.info(username.toUpperCase() + " Authorization: Basic "
-				+ Base64.getEncoder().encodeToString(basic.getBytes(StandardCharsets.UTF_8)));
+		return Base64.getEncoder().encodeToString(basic.getBytes(StandardCharsets.UTF_8));
 	}
 }

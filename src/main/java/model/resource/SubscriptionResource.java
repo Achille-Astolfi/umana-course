@@ -2,17 +2,19 @@ package model.resource;
 
 import java.util.Objects;
 
-import org.springframework.hateoas.ResourceSupport;
-
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+import org.springframework.hateoas.ResourceSupport;
+
 import model.entity.Subscription;
 
 @JsonPropertyOrder({ "id", "candidate", "course" })
+@JsonIgnoreProperties("_links")
 public class SubscriptionResource extends ResourceSupport {
 	@JsonIgnore
 	private Subscription entity;

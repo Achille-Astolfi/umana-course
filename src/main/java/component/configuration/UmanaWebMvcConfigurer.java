@@ -1,5 +1,6 @@
 package component.configuration;
 
+import java.net.URI;
 import java.util.Iterator;
 import java.util.Optional;
 
@@ -18,8 +19,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.ui.ModelMap;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.context.request.WebRequestInterceptor;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
@@ -63,14 +66,16 @@ public class UmanaWebMvcConfigurer implements WebMvcConfigurer {
 
 		@ExceptionHandler(UnauthorizedException.class)
 		ResponseEntity<?> handleUnauthorized(UnauthorizedException ue) {
+			var msg = ue.getMessage();
+			var header = msg != null ? String.format("Bearer realm=\"Umana\", %s", msg) : "Bearer realm=\"Umana\"";
 			return ResponseEntity.status(HttpStatus.UNAUTHORIZED)//
-					.header("WWW-Authenticate", "Basic realm=\"Umana\"")//
+					.header("WWW-Authenticate", header)//
 					.build();
 		}
 
 		@ExceptionHandler(ConstraintViolationException.class)
 		ResponseEntity<?> handleValidation(ConstraintViolationException cve) {
-			return ResponseEntity.badRequest()
+			return ResponseEntity.badRequest()//
 					.body(Resources.wrap(IterableWrapper.wrap(cve.getConstraintViolations())));
 		}
 	}
@@ -113,9 +118,19 @@ public class UmanaWebMvcConfigurer implements WebMvcConfigurer {
 
 		@Override
 		public void preHandle(WebRequest request) throws Exception {
+			// /token e / sono libere
+			var path = new URI(((ServletWebRequest) request).getRequest().getRequestURI()).getPath();
+			if (StringUtils.isEmpty(path) || path.equals("/") || path.equals("/token")) {
+				return;
+			}
+
 			var auth = request.getHeader("Authorization");
+			// no auth: sample WWW-Authorize
+			if (auth == null) {
+				throw new UnauthorizedException();
+			}
 			logger.debug(auth);
-			auth = strip(auth, "Basic ");
+			auth = strip(auth, "Bearer ");
 			try {
 				Optional<MvcUser> mvcUser;
 				if (auth != null && !auth.isBlank()
@@ -126,7 +141,7 @@ public class UmanaWebMvcConfigurer implements WebMvcConfigurer {
 			} catch (PersistenceException pe) {
 				// fallback
 			}
-			throw new UnauthorizedException();
+			throw new UnauthorizedException("error=\"invalid_token\"");
 		}
 
 		private String strip(String s, String prefix) {
